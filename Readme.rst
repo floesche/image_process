@@ -323,6 +323,12 @@ crop *top* *left* *right* *bottom*
   can be absolute (a number) or relative to the size of the image (a
   number followed by a percent sign ``%``).
 
+crop_c *width* *height*
+  Crop the image to the box with specified *width* and *height* around
+  the center of the image. Width and height can be specified absolute 
+  (as a number) or relative to the size of the image (a number followed 
+  by a percent sign ``%``).
+
 flip_horizontal
   Flip the image horizontally.
 

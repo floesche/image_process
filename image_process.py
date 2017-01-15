@@ -13,6 +13,13 @@ import functools
 import os.path
 import re
 import six
+import sys
+
+# urlparse has been renamed to urllib.parse in python3
+if sys.version_info < (3,):
+    from urlparse import urlparse
+else:
+    from urllib.parse import urlparse
 
 from PIL import Image, ImageFilter
 from bs4 import BeautifulSoup
@@ -63,6 +70,15 @@ def crop(i, t, l, r, b):
     """
     t, l, r, b = convert_box(i, t, l, r, b)
     return i.crop((int(t), int(l), int(r), int(b)))
+
+
+def crop_c(i, w, h):
+    """Crop image i to width w and height h around the center of the image.
+
+    w and h must be strings specifying either a number or a percentage.
+    """
+    h, w, sx, sy = convert_box(i, h, w, '100%', '100%')
+    return i.crop((int( sx/2 - w/2), int( sy/2 - h/2), int(sx/2 + w/2), int(sy/2 + h/2)))
 
 
 def resize(i, w, h):
@@ -148,6 +164,7 @@ def apply_filter(i, f):
 
 basic_ops = {
     'crop': crop,
+    'crop_c': crop_c,
     'flip_horizontal': lambda i: i.transpose(Image.FLIP_LEFT_RIGHT),
     'flip_vertical': lambda i: i.transpose(Image.FLIP_TOP_BOTTOM),
     'grayscale': lambda i: i.convert('L'),
@@ -175,6 +192,7 @@ def harvest_images(path, context):
     # Set default value for 'IMAGE_PROCESS_DIR'.
     if 'IMAGE_PROCESS_DIR' not in context:
         context['IMAGE_PROCESS_DIR'] = 'derivatives'
+
 
     with open(path, 'r+') as f:
         res = harvest_images_in_fragment(f, context)
@@ -233,17 +251,27 @@ def harvest_images_in_fragment(fragment, settings):
 
 def compute_paths(img, settings, derivative):
     process_dir = settings['IMAGE_PROCESS_DIR']
-    url_path, filename = os.path.split(img['src'])
+    rel_output, _ = os.path.split(settings['output_file'])
+    img_src_path = urlparse(img['src']).path
+    url_path, filename = os.path.split(img_src_path)
     base_url = os.path.join(url_path, process_dir, derivative)
-
     for f in settings['filenames']:
-        if os.path.basename(img['src']) in f:
+        if os.path.normpath(img_src_path) == os.path.normpath(f):
             source = settings['filenames'][f].source_path
             base_path = os.path.join(settings['OUTPUT_PATH'], os.path.dirname(settings['filenames'][f].save_as), process_dir, derivative)
             break
-    else:
-        source = os.path.join(settings['PATH'], img['src'][1:])
-        base_path = os.path.join(settings['OUTPUT_PATH'], base_url[1:])
+        else:
+            # Since images don't necessarily have to be in PATH (eg when
+            # generated from a library using the photos plugin), read them from
+            # OUTPUT_PATH instead
+            source = os.path.normpath(
+                os.path.join(settings['OUTPUT_PATH']
+                , rel_output
+                , os.path.normpath(img_src_path)))
+            base_path = os.path.normpath(
+                os.path.join(settings['OUTPUT_PATH']
+                    , rel_output
+                    , os.path.normpath(base_url)))
 
     return Path(base_url, source, base_path, filename, process_dir)
 
